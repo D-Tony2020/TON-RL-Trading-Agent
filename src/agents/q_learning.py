@@ -62,11 +62,10 @@ class QLearningAgent:
             return np.random.choice(max_actions)
 
     def select_greedy_action(self, state):
-        """纯贪心动作选择（用于评估/回测）"""
+        """纯贪心动作选择（用于评估/回测）
+        当多个动作 Q 值相同时, 选索引最小的（确定性, 保证可复现）"""
         q_values = self.q_table[state]
-        max_q = np.max(q_values)
-        max_actions = np.where(q_values == max_q)[0]
-        return np.random.choice(max_actions)
+        return int(np.argmax(q_values))
 
     def update(self, state, action, reward, next_state, done):
         """
