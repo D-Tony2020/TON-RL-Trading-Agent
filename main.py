@@ -39,6 +39,7 @@ from src.visualization import (
     plot_backtest_comparison, plot_regime_action_distribution,
     plot_correlation_heatmap, plot_rolling_correlation,
     plot_intraday_effects, plot_regime_correlation_comparison,
+    plot_agent_actions, plot_actions_comparison,
 )
 
 
@@ -128,11 +129,21 @@ def run_full_train(train_df):
     return agent_q, agent_dqn, history_q, history_dqn
 
 
-def run_backtest(test_df, agent_q, agent_dqn):
-    """运行回测"""
+def run_backtest(test_df, agent_q, agent_dqn, full_test_df=None):
+    """运行回测
+
+    Args:
+        test_df: 测试集 DataFrame
+        agent_q: Q-Learning agent
+        agent_dqn: DQN agent
+        full_test_df: 完整测试集 DataFrame (含时间索引, 用于动作可视化)
+    """
     print("\n" + "=" * 60)
     print("Phase 3: 回测")
     print("=" * 60)
+
+    if full_test_df is None:
+        full_test_df = test_df
 
     results = run_all_backtests(test_df, agent_q, agent_dqn)
 
@@ -158,6 +169,9 @@ def run_backtest(test_df, agent_q, agent_dqn):
         bt_result, _ = results[name]
         regime_analysis = analyze_by_regime(bt_result)
         plot_regime_action_distribution(regime_analysis, agent_name=name)
+
+    # 绘制 Agent 动作可视化（价格+动作标记+仓位+Portfolio）
+    plot_actions_comparison(full_test_df, results)
 
     print(f"\n  [OK] 回测图表已保存到 {FIGURES_DIR}")
     return results

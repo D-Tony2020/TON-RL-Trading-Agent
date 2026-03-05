@@ -293,6 +293,144 @@ def plot_intraday_effects(hourly_stats, title="TON Intraday Effects"):
     return _save_fig(fig, "intraday_effects")
 
 
+def plot_agent_actions(test_df, bt_result, agent_name="Agent", metrics=None):
+    """
+    Agent 动作可视化：价格 + 动作标记 + 仓位 + Portfolio
+
+    三行子图：
+    1. 价格曲线 + BUY/SELL/SHORT/COVER 标记点 + Regime 背景色
+    2. 仓位时间线 (position: -1=SHORT, 0=FLAT, 1=LONG)
+    3. Portfolio Value 曲线
+
+    Args:
+        test_df: 测试集 DataFrame (含 close, regime 列)
+        bt_result: backtest() 返回的 dict
+        agent_name: 策略名称
+        metrics: compute_metrics() 的结果 (可选, 用于标题)
+    Returns:
+        保存的文件路径
+    """
+    actions = bt_result["actions"]
+    positions = bt_result["positions"]
+    portfolio_values = bt_result["portfolio_values"]
+    regimes = bt_result.get("regimes", np.array([]))
+
+    n_steps = len(actions)
+    # 测试集时间轴 (actions 从 step 1 开始, 对齐到 test_df.index[1:])
+    time_index = test_df.index[1:n_steps + 1] if len(test_df) > n_steps else np.arange(n_steps)
+    prices = test_df["close"].values[1:n_steps + 1] if len(test_df) > n_steps else np.arange(n_steps)
+
+    # 动作标记配置
+    action_markers = {
+        BUY:   {"color": "#2ecc71", "marker": "^", "label": "BUY",   "size": 60},
+        SELL:  {"color": "#e74c3c", "marker": "v", "label": "SELL",  "size": 60},
+        SHORT: {"color": "#9b59b6", "marker": "v", "label": "SHORT", "size": 80},
+        COVER: {"color": "#f39c12", "marker": "^", "label": "COVER", "size": 80},
+    }
+
+    fig, axes = plt.subplots(3, 1, figsize=(18, 12), gridspec_kw={"height_ratios": [3, 1, 2]})
+    fig.subplots_adjust(hspace=0.15)
+
+    # ---- Panel 1: Price + Actions + Regime ----
+    ax1 = axes[0]
+    ax1.plot(time_index, prices, color="black", linewidth=0.7, alpha=0.8, zorder=2)
+
+    # Regime 背景色
+    if len(regimes) > 0:
+        for regime, color in REGIME_COLORS.items():
+            mask = regimes[:n_steps] == regime
+            if mask.any():
+                ax1.fill_between(
+                    time_index, np.min(prices) * 0.95, np.max(prices) * 1.05,
+                    where=mask, alpha=0.10, color=color, zorder=1,
+                )
+
+    # 动作标记
+    for action_id, style in action_markers.items():
+        mask = actions == action_id
+        if mask.any():
+            ax1.scatter(
+                np.array(time_index)[mask], prices[mask],
+                c=style["color"], marker=style["marker"], s=style["size"],
+                label=f'{style["label"]} (n={mask.sum()})',
+                alpha=0.85, edgecolors="white", linewidth=0.5, zorder=3,
+            )
+
+    # 标题: 含 metrics
+    title_str = f"{agent_name} - Test Set Actions"
+    if metrics:
+        title_str += f"  |  Return: {metrics['total_return']:+.2%}  Sharpe: {metrics['annualized_sharpe']:.2f}  MaxDD: {metrics['max_drawdown']:.2%}"
+    ax1.set_title(title_str, fontsize=13, fontweight="bold")
+    ax1.set_ylabel("Price (USD)")
+    ax1.legend(loc="upper right", fontsize=9, ncol=2)
+    ax1.tick_params(labelbottom=False)
+
+    # ---- Panel 2: Position Timeline ----
+    ax2 = axes[1]
+    pos_colors = np.where(positions == 1, "#2ecc71", np.where(positions == -1, "#9b59b6", "#95a5a6"))
+    ax2.bar(time_index, positions, color=pos_colors, width=0.04, alpha=0.8)
+    ax2.axhline(y=0, color="black", linewidth=0.5)
+    ax2.set_ylabel("Position")
+    ax2.set_yticks([-1, 0, 1])
+    ax2.set_yticklabels(["SHORT", "FLAT", "LONG"])
+    ax2.set_ylim(-1.3, 1.3)
+    ax2.tick_params(labelbottom=False)
+
+    # 计算各仓位占比
+    long_pct = np.mean(positions == 1) * 100
+    short_pct = np.mean(positions == -1) * 100
+    flat_pct = np.mean(positions == 0) * 100
+    ax2.set_title(f"Position  (LONG {long_pct:.1f}% | FLAT {flat_pct:.1f}% | SHORT {short_pct:.1f}%)",
+                  fontsize=10, loc="left")
+
+    # ---- Panel 3: Portfolio Value ----
+    ax3 = axes[2]
+    pv_time = test_df.index[:len(portfolio_values)] if len(test_df) >= len(portfolio_values) else np.arange(len(portfolio_values))
+    ax3.plot(pv_time, portfolio_values, color=STRATEGY_COLORS.get(agent_name, "#3498db"),
+             linewidth=1.5, label=agent_name)
+    ax3.axhline(y=portfolio_values[0], color="black", linestyle="--", alpha=0.3, label=f"Initial ${portfolio_values[0]:,.0f}")
+    ax3.fill_between(pv_time, portfolio_values[0], portfolio_values,
+                     where=np.array(portfolio_values) >= portfolio_values[0],
+                     alpha=0.15, color="#2ecc71")
+    ax3.fill_between(pv_time, portfolio_values[0], portfolio_values,
+                     where=np.array(portfolio_values) < portfolio_values[0],
+                     alpha=0.15, color="#e74c3c")
+    ax3.set_title(f"Portfolio Value  (${portfolio_values[0]:,.0f} -> ${portfolio_values[-1]:,.0f})",
+                  fontsize=10, loc="left")
+    ax3.set_ylabel("Portfolio ($)")
+    ax3.set_xlabel("Date")
+    ax3.legend(loc="best", fontsize=9)
+
+    # X 轴日期格式
+    import matplotlib.dates as mdates
+    for ax in [ax1, ax2, ax3]:
+        ax.xaxis.set_major_formatter(mdates.DateFormatter("%Y-%m"))
+        ax.xaxis.set_major_locator(mdates.MonthLocator())
+
+    fig.autofmt_xdate()
+    fig.tight_layout()
+    return _save_fig(fig, f"agent_actions_{agent_name.lower().replace(' ', '_').replace('-', '_')}")
+
+
+def plot_actions_comparison(test_df, results):
+    """
+    双 Agent 动作对比图：Q-Learning vs DQN 并排
+
+    Args:
+        test_df: 测试集 DataFrame
+        results: run_all_backtests() 的返回值
+    Returns:
+        保存的文件路径列表
+    """
+    saved = []
+    for name in ["Q-Learning", "DQN"]:
+        if name in results:
+            bt_result, metrics = results[name]
+            path = plot_agent_actions(test_df, bt_result, agent_name=name, metrics=metrics)
+            saved.append(path)
+    return saved
+
+
 def plot_regime_correlation_comparison(regime_corrs):
     """
     图8: 分 Regime 相关性对比
