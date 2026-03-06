@@ -287,10 +287,11 @@ class CryptoTradingEnv:
 
             # Differential Sharpe Ratio
             denom = (self._sharpe_B - self._sharpe_A ** 2)
-            if denom > 1e-12:
+            if denom > 1e-6:
                 dsr = (self._sharpe_B * delta_A - 0.5 * self._sharpe_A * delta_B) / (
                     denom ** 1.5
                 )
+                dsr = float(np.clip(dsr, -10.0, 10.0))  # 防止极端值
             else:
                 dsr = 0.0
 

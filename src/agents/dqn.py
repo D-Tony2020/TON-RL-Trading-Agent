@@ -168,7 +168,7 @@ class PrioritizedReplayBuffer:
     def push(self, state, action, reward, next_state, done):
         """添加 transition，初始优先级为当前最大优先级"""
         transition = (state, action, reward, next_state, done)
-        priority = self.max_priority ** self.alpha
+        priority = self.max_priority  # 不再重复应用 alpha（update_priorities 已含）
         self.tree.add(priority, transition)
 
     def sample(self, batch_size):
