@@ -261,6 +261,8 @@ class DQNAgent:
         self.epsilon_decay = p["epsilon_decay"]
         self.gradient_clip = p["gradient_clip"]
         self.min_buffer_size = p["min_buffer_size"]
+        self.soft_update_enabled = p.get("soft_update", False)
+        self.tau = p.get("tau", 0.005)
 
         # 设备（自动检测 GPU）
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -383,14 +385,32 @@ class DQNAgent:
 
         # 更新目标网络
         self.train_steps += 1
-        if self.train_steps % self.target_update_freq == 0:
-            self.update_target()
+        if self.soft_update_enabled:
+            self._soft_update_target()
+        elif self.train_steps % self.target_update_freq == 0:
+            self._hard_update_target()
 
         return loss.item(), current_q.mean().item()
 
-    def update_target(self):
+    def _hard_update_target(self):
         """硬更新目标网络：θ⁻ ← θ"""
         self.target_net.load_state_dict(self.online_net.state_dict())
+
+    def _soft_update_target(self):
+        """Polyak 软更新目标网络：θ⁻ ← τθ + (1-τ)θ⁻"""
+        for target_param, online_param in zip(
+            self.target_net.parameters(), self.online_net.parameters()
+        ):
+            target_param.data.copy_(
+                self.tau * online_param.data + (1.0 - self.tau) * target_param.data
+            )
+
+    def update_target(self):
+        """公共接口（向后兼容）"""
+        if self.soft_update_enabled:
+            self._soft_update_target()
+        else:
+            self._hard_update_target()
 
     def decay_epsilon(self):
         """衰减探索率"""

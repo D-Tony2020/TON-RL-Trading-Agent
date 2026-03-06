@@ -43,6 +43,17 @@ from src.visualization import (
 )
 
 
+def set_global_seed(seed=42):
+    """设置全局随机种子，保证训练可复现"""
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(seed)
+    # Python 内置 random 模块
+    import random
+    random.seed(seed)
+
+
 def ensure_dirs():
     """确保输出目录存在"""
     for d in [OUTPUT_DIR, CHECKPOINT_DIR, FIGURES_DIR, RESULTS_DIR]:
@@ -236,7 +247,12 @@ def main():
                         help="覆盖训练轮数")
     parser.add_argument("--resume", action="store_true",
                         help="从 checkpoint 恢复训练")
+    parser.add_argument("--seed", type=int, default=42,
+                        help="全局随机种子（默认42）")
     args = parser.parse_args()
+
+    # 设置全局随机种子（保证可复现性）
+    set_global_seed(args.seed)
 
     ensure_dirs()
 

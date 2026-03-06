@@ -128,11 +128,13 @@ DQN_PARAMS = {
     "gamma": 0.99,            # 折扣因子
     "batch_size": 32,         # 批量大小
     "buffer_size": 100_000,   # 经验回放缓冲区
-    "target_update": 1000,    # 目标网络更新频率（步）
+    "target_update": 1000,    # 目标网络硬更新频率（步）— 软更新时忽略
+    "soft_update": True,      # Run#5: 使用 Polyak 软更新
+    "tau": 0.005,             # 软更新系数 θ⁻ ← τθ + (1-τ)θ⁻
     "epsilon": 1.0,           # 初始探索率
     "epsilon_min": 0.05,      # 最小探索率
-    "epsilon_decay": 0.985,   # 探索率衰减（per episode: 0.985^200 ≈ 0.05）
-    "n_episodes": 200,        # 训练轮数
+    "epsilon_decay": 0.994,   # 探索率衰减（per episode: 0.994^500 ≈ 0.05）
+    "n_episodes": 500,        # 训练轮数（Run#5: 200→500）
     "episode_length": 720,    # 每轮步数
     "min_buffer_size": 5000,  # 开始训练前的最小缓冲区
     "gradient_clip": 1.0,     # 梯度裁剪
