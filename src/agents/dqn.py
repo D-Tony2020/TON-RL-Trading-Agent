@@ -292,6 +292,15 @@ class DQNAgent:
         self.optimizer = optim.Adam(self.online_net.parameters(), lr=p["lr"])
         self.loss_fn = nn.SmoothL1Loss(reduction="none")  # Huber Loss，逐元素
 
+        # 学习率调度（可选）
+        self.lr_schedule_enabled = p.get("lr_schedule", False)
+        self.scheduler = None
+        if self.lr_schedule_enabled:
+            total_steps = p["n_episodes"] * p["episode_length"]
+            self.scheduler = optim.lr_scheduler.CosineAnnealingLR(
+                self.optimizer, T_max=total_steps, eta_min=p.get("lr_end", 3e-5)
+            )
+
         # PER 缓冲区
         beta_frames = p["n_episodes"] * p["episode_length"]
         self.buffer = PrioritizedReplayBuffer(
@@ -382,6 +391,10 @@ class DQNAgent:
 
         # 更新 PER 优先级
         self.buffer.update_priorities(indices, td_errors)
+
+        # 学习率调度
+        if self.scheduler is not None:
+            self.scheduler.step()
 
         # 更新目标网络
         self.train_steps += 1

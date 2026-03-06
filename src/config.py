@@ -128,9 +128,11 @@ DQN_PARAMS = {
     "gamma": 0.99,            # 折扣因子
     "batch_size": 32,         # 批量大小
     "buffer_size": 100_000,   # 经验回放缓冲区
-    "target_update": 1000,    # 目标网络硬更新频率（步）— 软更新时忽略
-    "soft_update": True,      # Run#5: 使用 Polyak 软更新
-    "tau": 0.005,             # 软更新系数 θ⁻ ← τθ + (1-τ)θ⁻
+    "target_update": 500,     # 目标网络硬更新频率（步）Run#6: 1000→500
+    "soft_update": False,     # Run#6: 回退到硬更新（软更新导致Q值爆炸）
+    "tau": 0.005,             # 软更新系数（仅 soft_update=True 时生效）
+    "lr_schedule": True,      # Run#6: 学习率余弦退火
+    "lr_end": 3e-5,           # 最终学习率
     "epsilon": 1.0,           # 初始探索率
     "epsilon_min": 0.05,      # 最小探索率
     "epsilon_decay": 0.994,   # 探索率衰减（per episode: 0.994^500 ≈ 0.05）
