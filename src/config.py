@@ -122,7 +122,7 @@ QLEARNING_SEARCH_SPACE = {
 # DQN 超参数
 # ============================================================
 DQN_PARAMS = {
-    "state_dim": 7,           # 状态维度（含 volume_ratio）
+    "state_dim": 8,           # 状态维度（Run#7: hour→sin/cos, 7→8）
     "n_actions": 5,           # 动作数量 (BUY/HOLD/SELL/SHORT/COVER)
     "lr": 0.0003,             # 学习率 (Adam)
     "gamma": 0.99,            # 折扣因子

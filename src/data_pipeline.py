@@ -293,13 +293,14 @@ def discretize_state(features, bins_config=None):
 
 def normalize_state(features, ranges_config=None):
     """
-    将连续特征归一化到 [0, 1] 范围，供 DQN 使用
+    将连续特征归一化到 [0, 1] 或 [-1, 1] 范围，供 DQN 使用
+    hour_of_day 使用 sin/cos 周期编码（2维），其余线性归一化
 
     Args:
         features: dict，{特征名: 特征值}
         ranges_config: 归一化范围配置，默认使用 NORMALIZE_RANGES
     Returns:
-        np.ndarray: shape (7,) 的归一化状态向量
+        np.ndarray: shape (8,) 的归一化状态向量
     """
     if ranges_config is None:
         ranges_config = NORMALIZE_RANGES
@@ -307,11 +308,26 @@ def normalize_state(features, ranges_config=None):
     state = []
     for feature_name in [
         "price_change_24h", "price_change_4h", "volatility_24h",
-        "rsi_14", "hour_of_day", "position", "volume_ratio",
+        "rsi_14",
     ]:
         value = features[feature_name]
         low, high = ranges_config[feature_name]
-        # 裁剪到范围内再归一化
+        clipped = np.clip(value, low, high)
+        if high > low:
+            normalized = (clipped - low) / (high - low)
+        else:
+            normalized = 0.0
+        state.append(normalized)
+
+    # hour_of_day: sin/cos 周期编码（保留周期连续性）
+    hour = features["hour_of_day"]
+    state.append(np.sin(2 * np.pi * hour / 24.0))  # hour_sin ∈ [-1, 1]
+    state.append(np.cos(2 * np.pi * hour / 24.0))  # hour_cos ∈ [-1, 1]
+
+    # position 和 volume_ratio 照常归一化
+    for feature_name in ["position", "volume_ratio"]:
+        value = features[feature_name]
+        low, high = ranges_config[feature_name]
         clipped = np.clip(value, low, high)
         if high > low:
             normalized = (clipped - low) / (high - low)

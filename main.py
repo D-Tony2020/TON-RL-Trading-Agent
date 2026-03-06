@@ -124,7 +124,7 @@ def run_full_train(train_df):
     # DQN
     dqn_params = DQN_PARAMS
     print(f"\n--- Dueling Double DQN + PER ({dqn_params['n_episodes']} episodes × {dqn_params['episode_length']} steps) ---")
-    env_dqn = CryptoTradingEnv(train_df, mode="continuous", reward_mode="simple")
+    env_dqn = CryptoTradingEnv(train_df, mode="continuous", reward_mode="sharpe")
     agent_dqn = DQNAgent()
     history_dqn = train_dqn(env_dqn, agent_dqn, verbose=True)
 
