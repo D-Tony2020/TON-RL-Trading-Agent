@@ -307,6 +307,98 @@ class CryptoTradingEnv:
 
             return portfolio_return - cost_penalty - risk_penalty + sharpe_bonus
 
+        elif self.reward_mode == "arbitrageur":
+            # 理性套利者：均值回归 + 风险调整 + Sharpe
+            # Differential Sharpe Ratio（复用 sharpe 模式逻辑）
+            eta = self.reward_params.get("sharpe_eta", 0.01)
+            delta_A = portfolio_return - self._sharpe_A
+            delta_B = portfolio_return ** 2 - self._sharpe_B
+            self._sharpe_A += eta * delta_A
+            self._sharpe_B += eta * delta_B
+            denom = (self._sharpe_B - self._sharpe_A ** 2)
+            if denom > 1e-6:
+                dsr = (self._sharpe_B * delta_A - 0.5 * self._sharpe_A * delta_B) / (
+                    denom ** 1.5
+                )
+                dsr = float(np.clip(dsr, -10.0, 10.0))
+            else:
+                dsr = 0.0
+            sharpe_bonus = self.reward_params.get("lambda_sharpe", 1.5) * dsr
+
+            # 回撤惩罚
+            risk_penalty = 0.0
+            if self.max_portfolio_value > 0:
+                drawdown = (self.max_portfolio_value - self.portfolio_value) / self.max_portfolio_value
+                threshold = self.reward_params.get("drawdown_threshold", 0.03)
+                lambda_risk = self.reward_params.get("lambda_risk", 0.2)
+                risk_penalty = lambda_risk * max(0.0, drawdown - threshold)
+
+            # 均值回归奖励：RSI 极端时反向操作
+            row = self.df.iloc[self.current_step]
+            rsi = row.get("rsi_14", 0.5)
+            mr_weight = self.reward_params.get("mean_reversion_bonus", 0.5)
+            mean_reversion = 0.0
+            if rsi < 0.3 and position_before == 1:       # 超卖时做多
+                mean_reversion = mr_weight * (0.3 - rsi)
+            elif rsi > 0.7 and position_before == -1:     # 超买时做空
+                mean_reversion = mr_weight * (rsi - 0.7)
+
+            return portfolio_return - cost_penalty - risk_penalty + sharpe_bonus + mean_reversion
+
+        elif self.reward_mode == "manipulator":
+            # 操纵者：动量追逐 + 成交量利用
+            row = self.df.iloc[self.current_step]
+            pc4h = row.get("price_change_4h", 0.0)
+            vol_ratio = row.get("volume_ratio", 1.0)
+
+            # 动量奖励：短期动量方向与仓位一致时给予正奖励
+            momentum_weight = self.reward_params.get("momentum_bonus", 1.0)
+            momentum = 0.0
+            if position_before != 0 and pc4h != 0:
+                # 仓位方向与动量方向一致为正
+                alignment = position_before * np.sign(pc4h)
+                momentum = momentum_weight * alignment * abs(pc4h)
+
+            # 成交量异常奖励：高成交量时交易给予奖励
+            vol_weight = self.reward_params.get("volume_bonus", 0.5)
+            vol_threshold = self.reward_params.get("volume_threshold", 2.0)
+            volume_bonus = 0.0
+            if vol_ratio > vol_threshold and position_change > 0:
+                volume_bonus = vol_weight * (vol_ratio - vol_threshold) / vol_threshold
+
+            return portfolio_return - cost_penalty + momentum + volume_bonus
+
+        elif self.reward_mode == "retail":
+            # 从众散户：趋势追随 + 恐慌卖出 + 高风险厌恶
+            row = self.df.iloc[self.current_step]
+            pc24h = row.get("price_change_24h", 0.0)
+            volatility = row.get("volatility_24h", 0.0)
+
+            # 趋势追随奖励：24h 趋势方向与仓位一致
+            trend_weight = self.reward_params.get("trend_bonus", 0.8)
+            trend = 0.0
+            if position_before != 0 and pc24h != 0:
+                alignment = position_before * np.sign(pc24h)
+                trend = trend_weight * alignment * abs(pc24h)
+
+            # 恐慌卖出奖励：高波动率时离场给予奖励
+            panic_weight = self.reward_params.get("panic_bonus", 0.3)
+            vol_panic = self.reward_params.get("volatility_panic_threshold", 0.015)
+            panic = 0.0
+            if volatility > vol_panic and position_change > 0 and self.position == 0:
+                # 从持仓变为空仓（卖出/平空），在高波动时视为"正确"恐慌
+                panic = panic_weight * (volatility - vol_panic) / vol_panic
+
+            # 高回撤惩罚
+            risk_penalty = 0.0
+            if self.max_portfolio_value > 0:
+                drawdown = (self.max_portfolio_value - self.portfolio_value) / self.max_portfolio_value
+                threshold = self.reward_params.get("drawdown_threshold", 0.02)
+                lambda_risk = self.reward_params.get("lambda_risk", 0.5)
+                risk_penalty = lambda_risk * max(0.0, drawdown - threshold)
+
+            return portfolio_return - cost_penalty - risk_penalty + trend + panic
+
         else:
             # 默认 fallback 到 simple
             return portfolio_return - cost_penalty

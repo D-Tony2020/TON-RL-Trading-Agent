@@ -94,6 +94,29 @@ REWARD_CONFIG = {
         "drawdown_threshold": 0.05,  # 回撤触发阈值
         "sharpe_eta": 0.01,          # Differential Sharpe 的指数衰减因子
     },
+    # ---- Assignment 3: 三种交易者类型的差异化奖励 ----
+    "arbitrageur": {
+        "cost_rate": 0.002,              # 较高交易成本（谨慎交易）
+        "lambda_risk": 0.2,              # 回撤惩罚
+        "lambda_sharpe": 1.5,            # 强 Sharpe 奖励
+        "drawdown_threshold": 0.03,      # 低回撤容忍
+        "sharpe_eta": 0.01,              # DSR 衰减因子
+        "mean_reversion_bonus": 0.5,     # 均值回归奖励权重
+    },
+    "manipulator": {
+        "cost_rate": 0.0002,             # 极低交易成本（模拟前跑者低摩擦）
+        "momentum_bonus": 1.0,           # 动量追逐奖励权重
+        "volume_bonus": 0.5,             # 成交量信号奖励权重
+        "volume_threshold": 2.0,         # 成交量异常阈值
+    },
+    "retail": {
+        "cost_rate": 0.001,              # 标准交易成本
+        "lambda_risk": 0.5,              # 高回撤惩罚（散户风险厌恶）
+        "drawdown_threshold": 0.02,      # 低回撤容忍
+        "trend_bonus": 0.8,              # 趋势追随奖励权重
+        "panic_bonus": 0.3,              # 恐慌卖出奖励权重
+        "volatility_panic_threshold": 0.015,  # 恐慌触发波动率阈值
+    },
 }
 
 # ============================================================
@@ -183,4 +206,41 @@ RSI_RULE_SELL = 0.7   # RSI > 70 卖出（归一化后 0.7）
 PROGRESS_CONFIG = {
     "print_interval_qlearning": 20,   # Q-Learning 每20轮打印一次
     "print_interval_dqn": 10,         # DQN 每10轮打印一次
+    "print_interval_reinforce": 10,   # REINFORCE 每10轮打印一次
 }
+
+# ============================================================
+# REINFORCE 超参数 (Assignment 3)
+# ============================================================
+REINFORCE_PARAMS = {
+    "state_dim": 8,              # 状态维度（与 DQN 一致）
+    "n_actions": 5,              # 动作数量 (BUY/HOLD/SELL/SHORT/COVER)
+    "lr_policy": 0.0003,         # 策略网络学习率 (Adam)
+    "lr_value": 0.001,           # 价值网络学习率（baseline 可以学得快些）
+    "gamma": 0.99,               # 折扣因子
+    "hidden_dim": 128,           # 隐藏层维度
+    "n_episodes": 500,           # 训练轮数
+    "episode_length": 720,       # 每轮步数（≈30天）
+    "gradient_clip": 1.0,        # 梯度裁剪
+    "entropy_coeff": 0.01,       # 熵正则化系数（鼓励探索）
+    "checkpoint_interval": 20,   # 每20轮保存一次
+}
+
+# ============================================================
+# 特征名（对应 normalize_state 的 8D 输出）
+# ============================================================
+FEATURE_NAMES = [
+    "price_change_24h", "price_change_4h", "volatility_24h", "rsi_14",
+    "hour_sin", "hour_cos", "position", "volume_ratio",
+]
+
+# ============================================================
+# SHAP 分析配置 (Assignment 3)
+# ============================================================
+SHAP_CONFIG = {
+    "n_background_samples": 100,   # KernelExplainer 背景数据量
+    "n_explain_samples": 500,      # 待解释样本量
+}
+
+# 交易者类型列表
+TRADER_TYPES = ["arbitrageur", "manipulator", "retail"]
