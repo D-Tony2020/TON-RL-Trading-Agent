@@ -6,8 +6,8 @@ dist/
 build/
 *.egg
 
-# Data files (too large for git)
-data/
+# Data files (11MB, tracked for cross-device reproducibility)
+# data/
 
 # Output (models, figures, results - regeneratable)
 output/
