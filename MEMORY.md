@@ -71,14 +71,14 @@
 
 | Phase | 内容 | 状态 | 文件 |
 |-------|------|------|------|
-| 1 | config.py 扩展 | ✅ 已完成并推送 | `src/config.py` |
-| 2 | environment.py 新增 3 种 reward_mode | ✅ 已完成并推送 | `src/environment.py` |
-| 3 | REINFORCE Agent | ✅ 已完成并推送 | `src/agents/reinforce.py` |
-| 4 | 测试验证 | ⚠️ 文件已创建，未验证 | `tests/test_reinforce.py` |
-| 5 | 多交易者 + SHAP | ⬜ 未开始 | `src/traders.py` (待创建) |
-| 6 | 监管分析图表 | ⬜ 未开始 | `src/regulatory.py` (待创建) |
-| 7 | main.py 集成 | ⬜ 未开始 | `main.py` |
-| 8 | 收尾 | ⬜ 未开始 | CLAUDE.md, requirements.txt |
+| 1 | config.py 扩展 | ✅ 已完成 | `src/config.py` |
+| 2 | environment.py 新增 3 种 reward_mode | ✅ 已完成 | `src/environment.py` |
+| 3 | REINFORCE Agent | ✅ 已完成 + bug 修复 | `src/agents/reinforce.py` |
+| 4 | 测试验证 | ✅ 10/10 通过 | `tests/test_reinforce.py` |
+| 5 | 多交易者 + SHAP | ✅ 已完成 | `src/traders.py` |
+| 6 | 监管分析图表 | ✅ 已完成 | `src/regulatory.py` |
+| 7 | main.py 集成 | ✅ 已完成 (+4 mode) | `main.py` |
+| 8 | 收尾 | ✅ 已完成 | `requirements.txt`, `visualization.py` |
 
 ### 3.4 已完成的具体工作
 
@@ -102,30 +102,33 @@
 - `train_reinforce()`: GPU 支持 / 进度+ETA 每 10 ep / checkpoint 每 20 ep
 
 **Phase 4 — test_reinforce.py**:
-- 测试文件已创建，包含 TestPolicyNetwork / TestValueNetwork / TestREINFORCEAgent / TestREINFORCETraining / TestTraderRewardModes
-- **未能运行**: 本机 Python 3.14 导致 torch 导入超时(>180s)
-
-### 3.5 待完成的 Phase 设计
+- 10/10 单元测试通过（macOS Python 3.9.6 + torch 2.8.0）
+- 修复了 `finish_episode()` 中 value_net 梯度 bug：value 原在 `torch.no_grad()` 下计算，改为存储 state 并在 `finish_episode()` 中重新计算
 
 **Phase 5 — src/traders.py**:
-- `train_all_traders(train_df)` → 用 REINFORCE 分别训练 3 种 trader（仅奖励函数不同）
-- `compute_shap_values(agent, env)` → `shap.KernelExplainer` 封装 policy_net
-- `explain_top_features(shap_values)` → 每种 trader 的 top 3 特征
-- `plot_shap_comparison()` → 3 行 bar chart 对比
+- `train_all_traders(train_df)`: 用 REINFORCE 分别训练 3 种 trader
+- `compute_shap_values(agent, env)`: `shap.KernelExplainer` 封装 policy_net
+- `explain_top_features(shap_values)`: 每种 trader 的 top 3 特征
+- `plot_shap_comparison()`: 3 行 bar chart 对比（按重要性排序）
+- `run_trader_analysis()`: 一站式入口
 
 **Phase 6 — src/regulatory.py**:
-- Crisis Frequency: 按月统计 `regime=='decline'` 占比
-- Stablecoin Stability: `1 / (1 + rolling_std(TON-BTC correlation))`
-- Market Efficiency: 滚动 lag-1 autocorrelation of hourly returns
+- `compute_crisis_frequency()`: 按月统计 decline regime 占比
+- `compute_stablecoin_stability()`: `1 / (1 + rolling_std(TON-BTC corr))`
+- `compute_market_efficiency()`: 滚动 lag-1 autocorrelation
+- `plot_regulatory_dashboard()`: 三合一仪表盘（含双 Y 轴）
 
 **Phase 7 — main.py**:
 - 新增 mode: `reinforce` / `traders` / `regulatory` / `assignment3`
+- `run_reinforce()`: 训练 + 回测 + 与 DQN 对比
+- `run_traders()`: 委托 `run_trader_analysis()`
+- `run_regulatory_analysis()`: 委托 `plot_regulatory_dashboard()`
 - 不修改 `run_all_backtests()` 签名
 
 **Phase 8 — 收尾**:
-- 更新 CLAUDE.md 第 4 节 (5 actions + 8D state + REINFORCE)
-- requirements.txt 新增 `shap>=0.42`
-- 全量 pytest
+- `requirements.txt` 新增 `shap>=0.42`
+- `visualization.py`: `plot_training_curves()` 重构为动态 panel，兼容 REINFORCE 的 policy_loss/value_loss/entropy
+- MEMORY.md 更新进度
 
 ---
 
@@ -154,7 +157,9 @@ D:/Desktop/RL/project 1/
 │   ├── environment.py               # CryptoTradingEnv (6种 reward_mode)
 │   ├── backtest.py                  # 回测引擎 + 5种基线策略
 │   ├── correlation.py               # 跨资产相关性分析
-│   ├── visualization.py             # 8+类图表
+│   ├── visualization.py             # 8+类图表（含 REINFORCE 训练曲线支持）
+│   ├── traders.py                   # 多交易者训练 + SHAP 分析（新建）
+│   ├── regulatory.py                # 监管分析仪表盘（新建）
 │   └── agents/
 │       ├── q_learning.py            # 表格 Q-Learning
 │       ├── dqn.py                   # Dueling Double DQN + PER
@@ -183,8 +188,9 @@ D:/Desktop/RL/project 1/
 
 ## 6. 已知问题
 
-- **Python 3.14 + torch**: 本机 (LEGION) Python 3.14 环境导致 torch 导入极慢(>180s)，pytest 无法正常运行。建议在 Python 3.10-3.12 环境中测试。
-- **CLAUDE.md 第 4 节过时**: 仍写着 "3 actions, 不做空"，实际已是 5 actions。Phase 8 更新。
+- **Python 3.14 + torch**: 原机 (LEGION) Python 3.14 环境导致 torch 导入极慢(>180s)。macOS Python 3.9.6 + torch 2.8.0 测试通过。
+- **无数据目录**: 仓库不包含 `data/` 目录（.gitignore），依赖数据的测试（smoke_train, reward_mode）需要先放入数据文件。
+- **CLAUDE.md 缺失**: 仓库中无 CLAUDE.md 文件，需要创建。
 
 ---
 

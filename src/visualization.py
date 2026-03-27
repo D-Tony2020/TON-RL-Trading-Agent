@@ -78,68 +78,102 @@ def plot_price_with_regimes(df, title="TON Price with Market Regimes"):
 
 def plot_training_curves(history, agent_name="Agent"):
     """
-    图2: 训练曲线（episode reward, loss, Q-value, epsilon）
+    图2: 训练曲线（episode reward, loss, Q-value, epsilon / entropy）
+
+    自动检测 history 中的字段，兼容 Q-Learning、DQN、REINFORCE
 
     Args:
         history: 训练返回的 history dict
-        agent_name: 'Q-Learning' 或 'DQN'
+        agent_name: 'Q-Learning', 'DQN', 'REINFORCE' 等
     Returns:
         保存的文件路径
     """
-    n_plots = 2
+    # 动态确定子图数量
+    panels = ["reward"]  # 始终有 reward
+
+    has_epsilon = "epsilon_history" in history and len(history["epsilon_history"]) > 0
     has_loss = "losses" in history and any(l > 0 for l in history["losses"])
     has_q = "q_values_mean" in history and any(q != 0 for q in history["q_values_mean"])
-    if has_loss:
-        n_plots += 1
-    if has_q:
-        n_plots += 1
+    has_policy_loss = "policy_losses" in history and len(history["policy_losses"]) > 0
+    has_value_loss = "value_losses" in history and len(history["value_losses"]) > 0
+    has_entropy = "entropy_history" in history and len(history["entropy_history"]) > 0
 
+    if has_epsilon:
+        panels.append("epsilon")
+    if has_loss:
+        panels.append("loss")
+    if has_q:
+        panels.append("q_value")
+    if has_policy_loss:
+        panels.append("policy_loss")
+    if has_value_loss:
+        panels.append("value_loss")
+    if has_entropy:
+        panels.append("entropy")
+
+    n_plots = len(panels)
     fig, axes = plt.subplots(1, n_plots, figsize=(5 * n_plots, 4))
     if n_plots == 1:
         axes = [axes]
 
-    idx = 0
-
-    # Episode Reward
     rewards = history["episode_rewards"]
-    axes[idx].plot(rewards, alpha=0.3, color="blue")
-    # 滑动平均
     window = min(20, len(rewards) // 3) if len(rewards) > 3 else 1
-    if window > 1:
-        ma = pd.Series(rewards).rolling(window).mean()
-        axes[idx].plot(ma, color="blue", linewidth=2, label=f"MA-{window}")
-        axes[idx].legend()
-    axes[idx].set_title(f"{agent_name} - Episode Reward")
-    axes[idx].set_xlabel("Episode")
-    axes[idx].set_ylabel("Total Reward")
-    idx += 1
 
-    # Epsilon
-    axes[idx].plot(history["epsilon_history"], color="orange")
-    axes[idx].set_title(f"{agent_name} - Epsilon Decay")
-    axes[idx].set_xlabel("Episode")
-    axes[idx].set_ylabel("Epsilon")
-    idx += 1
+    for idx, panel in enumerate(panels):
+        ax = axes[idx]
 
-    # Loss（仅 DQN）
-    if has_loss:
-        losses = history["losses"]
-        axes[idx].plot(losses, alpha=0.3, color="red")
-        if window > 1:
-            ma = pd.Series(losses).rolling(window).mean()
-            axes[idx].plot(ma, color="red", linewidth=2)
-        axes[idx].set_title(f"{agent_name} - Loss")
-        axes[idx].set_xlabel("Episode")
-        axes[idx].set_ylabel("Huber Loss")
-        idx += 1
+        if panel == "reward":
+            ax.plot(rewards, alpha=0.3, color="blue")
+            if window > 1:
+                ma = pd.Series(rewards).rolling(window).mean()
+                ax.plot(ma, color="blue", linewidth=2, label=f"MA-{window}")
+                ax.legend()
+            ax.set_title(f"{agent_name} - Episode Reward")
+            ax.set_ylabel("Total Reward")
 
-    # Mean Q-value（仅 DQN）
-    if has_q:
-        q_vals = history["q_values_mean"]
-        axes[idx].plot(q_vals, color="green")
-        axes[idx].set_title(f"{agent_name} - Mean Q-Value")
-        axes[idx].set_xlabel("Episode")
-        axes[idx].set_ylabel("Q-Value")
+        elif panel == "epsilon":
+            ax.plot(history["epsilon_history"], color="orange")
+            ax.set_title(f"{agent_name} - Epsilon Decay")
+            ax.set_ylabel("Epsilon")
+
+        elif panel == "loss":
+            losses = history["losses"]
+            ax.plot(losses, alpha=0.3, color="red")
+            if window > 1:
+                ma = pd.Series(losses).rolling(window).mean()
+                ax.plot(ma, color="red", linewidth=2)
+            ax.set_title(f"{agent_name} - Loss")
+            ax.set_ylabel("Huber Loss")
+
+        elif panel == "q_value":
+            ax.plot(history["q_values_mean"], color="green")
+            ax.set_title(f"{agent_name} - Mean Q-Value")
+            ax.set_ylabel("Q-Value")
+
+        elif panel == "policy_loss":
+            pl = history["policy_losses"]
+            ax.plot(pl, alpha=0.3, color="red")
+            if window > 1:
+                ma = pd.Series(pl).rolling(window).mean()
+                ax.plot(ma, color="red", linewidth=2)
+            ax.set_title(f"{agent_name} - Policy Loss")
+            ax.set_ylabel("Policy Loss")
+
+        elif panel == "value_loss":
+            vl = history["value_losses"]
+            ax.plot(vl, alpha=0.3, color="purple")
+            if window > 1:
+                ma = pd.Series(vl).rolling(window).mean()
+                ax.plot(ma, color="purple", linewidth=2)
+            ax.set_title(f"{agent_name} - Value Loss")
+            ax.set_ylabel("Value Loss")
+
+        elif panel == "entropy":
+            ax.plot(history["entropy_history"], color="teal")
+            ax.set_title(f"{agent_name} - Entropy")
+            ax.set_ylabel("Entropy")
+
+        ax.set_xlabel("Episode")
 
     fig.suptitle(f"{agent_name} Training Curves", fontsize=14, y=1.02)
     fig.tight_layout()

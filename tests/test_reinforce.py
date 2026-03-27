@@ -37,20 +37,23 @@ class TestPolicyNetwork:
         out = net(x)
         assert out.shape == (4, 5)
 
-    def test_softmax_sum(self):
-        """输出为概率分布，和为 1"""
+    def test_logits_output(self):
+        """输出为 logits（可正可负，不受 Softmax 约束）"""
         net = PolicyNetwork(state_dim=8, n_actions=5)
         x = torch.randn(10, 8)
-        probs = net(x)
-        sums = probs.sum(dim=1)
-        assert torch.allclose(sums, torch.ones(10), atol=1e-5)
+        logits = net(x)
+        assert logits.shape == (10, 5)
+        # logits 不需要全正或和为 1，Categorical(logits=) 内部处理
 
-    def test_all_positive(self):
-        """所有概率 > 0"""
+    def test_categorical_compatible(self):
+        """logits 可以直接用于 Categorical 分布"""
         net = PolicyNetwork(state_dim=8, n_actions=5)
-        x = torch.randn(10, 8)
-        probs = net(x)
-        assert (probs > 0).all()
+        x = torch.randn(1, 8)
+        logits = net(x)
+        from torch.distributions import Categorical
+        dist = Categorical(logits=logits)
+        action = dist.sample()
+        assert 0 <= action.item() < 5
 
 
 # ============================================================
@@ -84,8 +87,8 @@ class TestREINFORCEAgent:
             action = agent.select_action(state)
             assert 0 <= action < 5
         # 清空 buffer 防止影响其他测试
+        agent.saved_states = []
         agent.log_probs = []
-        agent.values = []
         agent.rewards = []
         agent.entropies = []
 

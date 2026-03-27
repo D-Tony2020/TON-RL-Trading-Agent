@@ -59,6 +59,9 @@ class CryptoTradingEnv:
 
         self.cost_rate = self.reward_params["cost_rate"]
 
+        # 奖励缩放因子（放大信号强度，便于 RL 学习）
+        self.reward_scale = REWARD_CONFIG.get("reward_scale", 1)
+
         # 数据长度
         self.data_length = len(self.df)
 
@@ -200,7 +203,7 @@ class CryptoTradingEnv:
         # ---- 计算奖励 ----
         reward = self._compute_reward(
             position_before, transaction_cost, current_price, next_price
-        )
+        ) * self.reward_scale
 
         # ---- 检查是否结束 ----
         done = self.current_step >= self.end_step

@@ -84,6 +84,7 @@ NORMALIZE_RANGES = {
 # 奖励函数配置
 # ============================================================
 REWARD_CONFIG = {
+    "reward_scale": 100,             # 奖励缩放因子（Run2: 放大信号强度）
     "simple": {
         "cost_rate": 0.001,          # 单边交易成本 0.1%
     },
@@ -215,14 +216,14 @@ PROGRESS_CONFIG = {
 REINFORCE_PARAMS = {
     "state_dim": 8,              # 状态维度（与 DQN 一致）
     "n_actions": 5,              # 动作数量 (BUY/HOLD/SELL/SHORT/COVER)
-    "lr_policy": 0.0003,         # 策略网络学习率 (Adam)
+    "lr_policy": 0.001,          # 策略网络学习率 (Adam) — Run1: 0.0003→0.001 加速策略学习
     "lr_value": 0.001,           # 价值网络学习率（baseline 可以学得快些）
-    "gamma": 0.99,               # 折扣因子
+    "gamma": 0.95,               # 折扣因子 — Run2: 0.99→0.95 缩短视野加速信号传递
     "hidden_dim": 128,           # 隐藏层维度
     "n_episodes": 500,           # 训练轮数
     "episode_length": 720,       # 每轮步数（≈30天）
     "gradient_clip": 1.0,        # 梯度裁剪
-    "entropy_coeff": 0.01,       # 熵正则化系数（鼓励探索）
+    "entropy_coeff": 0.001,      # 熵正则化系数 — Run1: 0.01→0.001 防止 entropy 主导 loss
     "checkpoint_interval": 20,   # 每20轮保存一次
 }
 

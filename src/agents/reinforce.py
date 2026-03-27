@@ -22,7 +22,7 @@ from src.config import (
 
 
 class PolicyNetwork(nn.Module):
-    """策略网络：两层 MLP → Softmax 概率分布"""
+    """策略网络：两层 MLP → logits（不含 Softmax，由 Categorical 处理）"""
 
     def __init__(self, state_dim=8, n_actions=5, hidden_dim=128):
         super().__init__()
@@ -32,11 +32,10 @@ class PolicyNetwork(nn.Module):
             nn.Linear(hidden_dim, hidden_dim),
             nn.ReLU(),
             nn.Linear(hidden_dim, n_actions),
-            nn.Softmax(dim=-1),
         )
 
     def forward(self, x):
-        return self.net(x)
+        return self.net(x)  # 输出 logits，不是 probs
 
 
 class ValueNetwork(nn.Module):
@@ -88,8 +87,8 @@ class REINFORCEAgent:
         )
 
         # Episode buffer（每 episode 清空）
+        self.saved_states = []
         self.log_probs = []
-        self.values = []
         self.rewards = []
         self.entropies = []
 
@@ -106,16 +105,14 @@ class REINFORCEAgent:
             int: 选中的动作
         """
         state_t = torch.FloatTensor(state).unsqueeze(0).to(self.device)
-        with torch.no_grad():
-            value = self.value_net(state_t)
 
-        probs = self.policy_net(state_t)
-        dist = Categorical(probs)
+        logits = self.policy_net(state_t)
+        dist = Categorical(logits=logits)
         action = dist.sample()
 
-        # 存入 episode buffer
+        # 存入 episode buffer（state 用于 finish_episode 中重新计算 value）
+        self.saved_states.append(state_t.detach())
         self.log_probs.append(dist.log_prob(action))
-        self.values.append(value.squeeze())
         self.entropies.append(dist.entropy())
 
         return action.item()
@@ -131,16 +128,19 @@ class REINFORCEAgent:
         """
         state_t = torch.FloatTensor(state).unsqueeze(0).to(self.device)
         with torch.no_grad():
-            probs = self.policy_net(state_t)
-        return int(torch.argmax(probs, dim=1).item())
+            logits = self.policy_net(state_t)
+        return int(torch.argmax(logits, dim=1).item())
 
     def store_reward(self, reward):
         """存储当前步的奖励"""
         self.rewards.append(reward)
 
-    def finish_episode(self):
+    def finish_episode(self, accumulate=False):
         """
         Episode 结束后执行 REINFORCE 更新
+
+        Args:
+            accumulate: 如果 True，只累积梯度不更新（用于 batch update）
 
         Returns:
             tuple: (policy_loss, value_loss, mean_entropy)
@@ -156,17 +156,15 @@ class REINFORCEAgent:
             returns.insert(0, G)
         returns_t = torch.FloatTensor(returns).to(self.device)
 
-        # 需要重新计算 log_probs 的梯度（select_action 中存的有 grad）
         log_probs_t = torch.stack(self.log_probs)
-        values_t = torch.stack(self.values)
         entropies_t = torch.stack(self.entropies)
 
-        # Advantage = G_t - V(s_t)，标准化以稳定训练
+        # 重新计算 value（需要梯度以更新 value_net）
+        states_t = torch.cat(self.saved_states, dim=0)  # (T, state_dim)
+        values_t = self.value_net(states_t).squeeze(-1)  # (T,)
+
+        # Advantage = G_t - V(s_t)（不做标准化，保留原始信号强度）
         advantages = returns_t - values_t.detach()
-        if len(advantages) > 1:
-            adv_std = advantages.std()
-            if adv_std > 1e-8:
-                advantages = (advantages - advantages.mean()) / (adv_std + 1e-8)
 
         # Policy loss: -E[log_prob * advantage] - entropy_coeff * entropy
         policy_loss = -(log_probs_t * advantages).mean() - self.entropy_coeff * entropies_t.mean()
@@ -174,16 +172,19 @@ class REINFORCEAgent:
         # Value loss: MSE(V(s_t), G_t)
         value_loss = nn.functional.mse_loss(values_t, returns_t)
 
-        # 分别更新两个网络
-        self.policy_optimizer.zero_grad()
+        # 反向传播（累积梯度）
         policy_loss.backward()
-        nn.utils.clip_grad_norm_(self.policy_net.parameters(), self.gradient_clip)
-        self.policy_optimizer.step()
-
-        self.value_optimizer.zero_grad()
         value_loss.backward()
-        nn.utils.clip_grad_norm_(self.value_net.parameters(), self.gradient_clip)
-        self.value_optimizer.step()
+
+        if not accumulate:
+            # 立即更新
+            nn.utils.clip_grad_norm_(self.policy_net.parameters(), self.gradient_clip)
+            self.policy_optimizer.step()
+            self.policy_optimizer.zero_grad()
+
+            nn.utils.clip_grad_norm_(self.value_net.parameters(), self.gradient_clip)
+            self.value_optimizer.step()
+            self.value_optimizer.zero_grad()
 
         # 记录指标
         p_loss = policy_loss.item()
@@ -191,12 +192,22 @@ class REINFORCEAgent:
         mean_ent = entropies_t.mean().item()
 
         # 清空 episode buffer
+        self.saved_states = []
         self.log_probs = []
-        self.values = []
         self.rewards = []
         self.entropies = []
 
         return p_loss, v_loss, mean_ent
+
+    def flush_gradients(self):
+        """Batch update: 裁剪并应用累积的梯度，然后清零"""
+        nn.utils.clip_grad_norm_(self.policy_net.parameters(), self.gradient_clip)
+        self.policy_optimizer.step()
+        self.policy_optimizer.zero_grad()
+
+        nn.utils.clip_grad_norm_(self.value_net.parameters(), self.gradient_clip)
+        self.value_optimizer.step()
+        self.value_optimizer.zero_grad()
 
     def decay_epsilon(self):
         """No-op，REINFORCE 无 epsilon，保留接口兼容"""
