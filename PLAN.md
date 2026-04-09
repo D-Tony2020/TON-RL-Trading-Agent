@@ -2,8 +2,6 @@
 
 ## Context
 
-ORIE 5570 Assignment 3，在 Assignment 2 的 TON RL 交易项目基础上扩展：
-
 1. 实现 REINFORCE with Baseline，与已有 DQN 对比
 2. 建模 3 种交易者类型（套利者/操纵者/散户），用 SHAP 解释特征重要性
 3. 绘制危机频率、稳定币稳定性、市场效率三张监管分析图
