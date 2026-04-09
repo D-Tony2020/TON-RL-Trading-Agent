@@ -2,7 +2,7 @@
 
 ## 1. 项目身份
 
-ORIE5570 (Cornell Tech, Prof. Irene Aldridge) bi-weekly assignment。用 Q-Learning (TD) + Dueling Double DQN (PER) + REINFORCE with Baseline 建模理性投资者在 TON 加密货币三种市场场景（稳态/急跌/急涨）下的最优行为。Assignment 3 扩展：多交易者类型建模 + SHAP 特征解释 + 监管分析。
+用 Q-Learning (TD) + Dueling Double DQN (PER) + REINFORCE with Baseline 建模理性投资者在 TON 加密货币三种市场场景（稳态/急跌/急涨）下的最优行为。Assignment 3 扩展：多交易者类型建模 + SHAP 特征解释 + 监管分析。
 
 ## 2. 语言与风格
 
